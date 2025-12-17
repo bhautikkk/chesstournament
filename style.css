@@ -526,6 +526,18 @@ input:focus {
     background: rgba(255, 68, 68, 0.4);
 }
 
+.bg-blue {
+    background: rgba(68, 136, 255, 0.2);
+    color: #4488ff;
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.bg-blue:hover {
+    background: rgba(68, 136, 255, 0.4);
+}
+
 .action-controls.hidden {
     display: none;
     /* Hide from spectators */
@@ -738,4 +750,36 @@ input:focus {
 .turn-tag {
     font-weight: bold;
     color: #81b64c;
+}
+
+/* Board Coordinates */
+.coord-rank {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.coord-file {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* Contrast Colors */
+.square.white .coord-rank,
+.square.white .coord-file {
+    color: var(--board-black);
+}
+
+.square.black .coord-rank,
+.square.black .coord-file {
+    color: var(--board-white);
 }

@@ -95,6 +95,7 @@ const btnEnd = document.getElementById('btnEnd');
 const actionControls = document.getElementById('actionControls');
 const btnDraw = document.getElementById('btnDraw');
 const btnResign = document.getElementById('btnResign');
+const btnPGN = document.getElementById('btnPGN');
 
 let selectedSquare = null;
 let timerInterval = null;
@@ -110,6 +111,19 @@ btnStart.addEventListener('click', () => goToMove(0));
 btnPrev.addEventListener('click', () => goToMove(currentViewIndex - 1));
 btnNext.addEventListener('click', () => goToMove(currentViewIndex + 1));
 btnEnd.addEventListener('click', () => goLive());
+
+// PGN Button Listener
+if (btnPGN) {
+    btnPGN.addEventListener('click', () => {
+        const pgn = game.pgn();
+        navigator.clipboard.writeText(pgn).then(() => {
+            showToast("PGN Copied to Clipboard!");
+        }).catch(err => {
+            console.error('Failed to copy PGN: ', err);
+            showToast("Failed to copy PGN");
+        });
+    });
+}
 
 function goLive() {
     currentViewIndex = -1;
@@ -283,6 +297,9 @@ socket.on('game_over', ({ reason, winner, message, fen, lastMove }) => {
     isGameActive = false;
     hasGameEnded = true;
     if (timerInterval) clearInterval(timerInterval);
+
+    // Show PGN Button
+    if (btnPGN) btnPGN.classList.remove('hidden');
 
     // Standard Message for Popup (2s)
     let title = "";
@@ -501,7 +518,10 @@ socket.on('game_started', ({ whitePlayerId, blackPlayerId }) => {
         }
     }
 
+
+
     game.reset();
+    if (btnPGN) btnPGN.classList.add('hidden'); // Hide PGN at start of new game
     whiteTime = 600;
     blackTime = 600;
     updateTurnIndicator();
@@ -511,8 +531,69 @@ socket.on('game_started', ({ whitePlayerId, blackPlayerId }) => {
     updateDashboardUI();  // NEW
 });
 
-socket.on('move_made', (move) => {
-    game.move(move);
+socket.on('reconnect_game', ({ whitePlayerId, blackPlayerId, fen, whiteTime: wT, blackTime: bT, turn }) => {
+    isGameActive = true;
+    showScreen('game');
+    gameRoomCodeDisplay.innerText = "Room: " + currentRoom.code;
+
+    // Determine Role & Names (Copied from game_started logic)
+    let opponentId = null;
+
+    if (myId === whitePlayerId) {
+        myColor = 'w';
+        opponentId = blackPlayerId;
+    } else if (myId === blackPlayerId) {
+        myColor = 'b';
+        opponentId = whitePlayerId;
+    } else {
+        myColor = null; // Spectator
+        opponentId = blackPlayerId;
+    }
+
+    // Set Names
+    if (myColor === null) {
+        const whiteP = currentRoom.players.find(p => p.id === whitePlayerId);
+        const blackP = currentRoom.players.find(p => p.id === blackPlayerId);
+        myNameDisplay.innerText = whiteP ? whiteP.name : "White";
+        oppNameDisplay.innerText = blackP ? blackP.name : "Black";
+        if (actionControls) actionControls.classList.add('hidden');
+    } else {
+        const myPlayer = currentRoom.players.find(p => p.id === myId);
+        if (myPlayer) myNameDisplay.innerText = myPlayer.name;
+        if (actionControls) actionControls.classList.remove('hidden');
+
+        if (opponentId) {
+            const oppPlayer = currentRoom.players.find(p => p.id === opponentId);
+            if (oppPlayer) oppNameDisplay.innerText = oppPlayer.name;
+        }
+    }
+
+    // Restore State
+    game.load(fen);
+    whiteTime = Math.ceil(wT);
+    blackTime = Math.ceil(bT);
+
+    updateTurnIndicator();
+    renderBoard();
+    updateMaterial();
+    startTimers();
+    updateDashboardUI();
+});
+
+socket.on('move_made', ({ move, fen, whiteTime: wT, blackTime: bT }) => {
+    // Try to play the move to preserve history
+    const result = game.move(move);
+
+    // If move failed or FEN doesn't match, force load (fixing desync)
+    if (!result || (fen && game.fen() !== fen)) {
+        console.warn("Syncing board state (History may be reset)");
+        if (fen) game.load(fen);
+    }
+
+    // Sync Timers
+    if (wT !== undefined) whiteTime = Math.ceil(wT);
+    if (bT !== undefined) blackTime = Math.ceil(bT);
+
     currentViewIndex = -1; // Snap everyone to live on new move
     updateTurnIndicator();
     renderBoard();
@@ -594,9 +675,12 @@ function updateSlotUI(slotEl, player) {
 // TIMER & MATERIAL LOGIC
 // ============================================
 
+// Timer & Material Logic
+let lastTimerSync = 0; // Timestamp of last server sync
+
 function startTimers() {
     if (timerInterval) clearInterval(timerInterval);
-    lastMoveTime = Date.now();
+    lastTimerSync = Date.now();
 
     timerInterval = setInterval(() => {
         if (!isGameActive || game.game_over()) {
@@ -604,67 +688,56 @@ function startTimers() {
             return;
         }
 
-        // Determine whose turn it is
-        const turn = game.turn(); // 'w' or 'b'
+        const turn = game.turn();
+        const now = Date.now();
+        const elapsed = (now - lastTimerSync) / 1000;
 
-        // Simple decrement
+        let curWhite = whiteTime;
+        let curBlack = blackTime;
+
         if (turn === 'w') {
-            if (whiteTime > 0) whiteTime--;
+            curWhite = Math.max(0, whiteTime - elapsed);
         } else {
-            if (blackTime > 0) blackTime--;
+            curBlack = Math.max(0, blackTime - elapsed);
         }
 
-        updateDashboardUI();
+        updateDashboardUI(curWhite, curBlack);
 
-        // Check Flag Fall
-        if (whiteTime <= 0 || blackTime <= 0) {
+        if (curWhite <= 0 || curBlack <= 0) {
             clearInterval(timerInterval);
-            handleFlagFall();
+            handleFlagFall(curWhite <= 0 ? 'white' : 'black');
         }
-    }, 1000);
+    }, 100);
 }
 
-function handleFlagFall() {
+function handleFlagFall(loser) {
     isGameActive = false;
-    let winner = (whiteTime <= 0) ? 'Black' : 'White';
+    let winner = (loser === 'white') ? 'Black' : 'White';
     turnIndicator.innerHTML = `Game Over: ${winner} wins on time!`;
-    // Ideally emit this to server too, but for visual prototype, this works.
 }
 
-function updateDashboardUI() {
-    // Format Times
-    const wStr = formatTime(whiteTime);
-    const bStr = formatTime(blackTime);
-
-    // Update Timers based on perspective
-    // If I am White: Opponent is Black.
-    // If I am Black: Opponent is White.
-    // If Spectator: Default White bottom? Or just Fixed.
-
-    // Logic: 
-    // myColor variable holds 'w', 'b', or null.
+function updateDashboardUI(curWhite = whiteTime, curBlack = blackTime) {
+    const wStr = formatTime(Math.ceil(curWhite));
+    const bStr = formatTime(Math.ceil(curBlack));
 
     if (myColor === 'b') {
-        // I am Black
         myTimer.innerText = bStr;
         oppTimer.innerText = wStr;
 
         myTimer.classList.toggle('active', game.turn() === 'b');
         oppTimer.classList.toggle('active', game.turn() === 'w');
 
-        myTimer.classList.toggle('low-time', blackTime < 30);
-        oppTimer.classList.toggle('low-time', whiteTime < 30);
-
+        myTimer.classList.toggle('low-time', curBlack < 30);
+        oppTimer.classList.toggle('low-time', curWhite < 30);
     } else {
-        // I am White or Spectator (default view White at bottom)
         myTimer.innerText = wStr;
         oppTimer.innerText = bStr;
 
         myTimer.classList.toggle('active', game.turn() === 'w');
         oppTimer.classList.toggle('active', game.turn() === 'b');
 
-        myTimer.classList.toggle('low-time', whiteTime < 30);
-        oppTimer.classList.toggle('low-time', blackTime < 30);
+        myTimer.classList.toggle('low-time', curWhite < 30);
+        oppTimer.classList.toggle('low-time', curBlack < 30);
     }
 }
 
@@ -867,6 +940,21 @@ function renderBoard() {
             const squareId = String.fromCharCode('a'.charCodeAt(0) + col) + (8 - row);
             square.dataset.square = squareId;
 
+            // Coordinates Logic
+            if (c === 0) {
+                const rankSpan = document.createElement('span');
+                rankSpan.classList.add('coord-rank');
+                rankSpan.innerText = (8 - row);
+                square.appendChild(rankSpan);
+            }
+
+            if (r === 7) {
+                const fileSpan = document.createElement('span');
+                fileSpan.classList.add('coord-file');
+                fileSpan.innerText = String.fromCharCode('a'.charCodeAt(0) + col);
+                square.appendChild(fileSpan);
+            }
+
             const piece = boardToRender[row][col];
             if (piece) {
                 const pieceImg = document.createElement('img');
@@ -956,7 +1044,8 @@ function handleSquareClick(squareId) {
             // Emit move
             socket.emit('make_move', {
                 roomCode: currentRoom.code,
-                move: moveAttempt
+                move: moveAttempt,
+                fen: game.fen()
             });
             updateMaterial();     // NEW
             updateDashboardUI();  // NEW

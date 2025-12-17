@@ -32,7 +32,11 @@ io.on('connection', (socket) => {
                 black: null
             },
             gameStarted: false,
-            fen: 'start' // Initial FEN
+            fen: 'start',
+            turn: 'w',
+            whiteTime: 600,
+            blackTime: 600,
+            lastMoveTime: 0
         };
 
         socket.join(roomCode);
@@ -57,6 +61,32 @@ io.on('connection', (socket) => {
 
             socket.emit('joined_room', { roomCode, isAdmin });
             io.to(roomCode).emit('update_lobby', room);
+
+            // Reconnection Logic: If game is active, send full state
+            if (room.gameStarted) {
+                // Calculate current elapsed time for the active turn
+                let currentWhiteTime = room.whiteTime;
+                let currentBlackTime = room.blackTime;
+
+                if (room.lastMoveTime > 0) {
+                    const elapsed = (Date.now() - room.lastMoveTime) / 1000;
+                    if (room.turn === 'w') {
+                        currentWhiteTime = Math.max(0, currentWhiteTime - elapsed);
+                    } else {
+                        currentBlackTime = Math.max(0, currentBlackTime - elapsed);
+                    }
+                }
+
+                socket.emit('reconnect_game', {
+                    whitePlayerId: room.slots.white.id,
+                    blackPlayerId: room.slots.black.id,
+                    fen: room.fen,
+                    whiteTime: currentWhiteTime,
+                    blackTime: currentBlackTime,
+                    turn: room.turn
+                });
+            }
+
             console.log(`${playerName} joined room ${roomCode}`);
         } else {
             socket.emit('error_message', 'Invalid Room Code');
@@ -86,6 +116,12 @@ io.on('connection', (socket) => {
         if (room && room.admin === socket.id) {
             if (room.slots.white && room.slots.black) {
                 room.gameStarted = true;
+                room.fen = 'start';
+                room.whiteTime = 600;
+                room.blackTime = 600;
+                room.turn = 'w';
+                room.lastMoveTime = Date.now(); // Start clock now
+
                 io.to(roomCode).emit('game_started', {
                     whitePlayerId: room.slots.white.id,
                     blackPlayerId: room.slots.black.id
@@ -114,12 +150,48 @@ io.on('connection', (socket) => {
     });
 
     // Make Move
-    socket.on('make_move', ({ roomCode, move }) => {
+    socket.on('make_move', ({ roomCode, move, fen }) => {
         const room = rooms[roomCode];
         if (room && room.gameStarted) {
-            // In a real app, validate move with chess logic here to prevent cheating
-            // For now, we relay it
-            socket.to(roomCode).emit('move_made', move);
+            const now = Date.now();
+            const elapsed = (now - room.lastMoveTime) / 1000;
+
+            // Identify player
+            const isWhite = room.slots.white.id === socket.id;
+            const isBlack = room.slots.black.id === socket.id;
+
+            // Simple validation: Ensure it's the correct player's turn
+            if ((isWhite && room.turn !== 'w') || (isBlack && room.turn !== 'b')) {
+                // Ignore out of turn moves
+                return;
+            }
+
+            // Update time
+            if (room.turn === 'w') {
+                room.whiteTime -= elapsed;
+            } else {
+                room.blackTime -= elapsed;
+            }
+
+            // Check for timeout
+            if (room.whiteTime <= 0 || room.blackTime <= 0) {
+                const winner = (room.whiteTime <= 0) ? 'Black' : 'White';
+                io.to(roomCode).emit('game_over', {
+                    reason: 'Timeout',
+                    winner: winner,
+                    message: `Time's up! ${winner} Wins!`
+                });
+                room.gameStarted = false;
+                return;
+            }
+
+            // Update State
+            room.fen = fen;
+            room.turn = (room.turn === 'w') ? 'b' : 'w';
+            room.lastMoveTime = now;
+
+            // Broadcast to OTHERS with new time
+            socket.to(roomCode).emit('move_made', { move, fen, whiteTime: room.whiteTime, blackTime: room.blackTime });
         }
     });
 
