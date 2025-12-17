@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Glass Chess</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-glob moved"></div>
+    <div class="background-glob moved-2"></div>
+
+    <!-- SCREENS -->
+
+    <!-- 1. LOGIN SCREEN -->
+    <div id="loginScreen" class="screen active">
+        <div class="glass-card">
+            <h1>Neon Chess</h1>
+            <p>Enter your name to begin</p>
+            <input type="text" id="playerNameInput" placeholder="Your Username" autocomplete="off" maxlength="12">
+            <button id="loginBtn" class="glow-btn">Enter</button>
+        </div>
+    </div>
+
+    <!-- 2. MAIN MENU SCREEN -->
+    <div id="menuScreen" class="screen hidden">
+        <div class="glass-card">
+            <h1>Main Menu</h1>
+            <div class="menu-buttons">
+                <button id="createRoomBtn" class="glow-btn large">Create Room</button>
+                <button id="joinRoomMenuBtn" class="glow-btn large outline">Join Room</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. JOIN ROOM INPUT SCREEN -->
+    <div id="joinScreen" class="screen hidden">
+        <div class="glass-card">
+            <h1>Join Room</h1>
+            <input type="text" id="roomCodeInput" placeholder="6-Digit Code" maxlength="6">
+            <div class="menu-buttons">
+                <button id="joinRoomBtn" class="glow-btn">Join</button>
+                <button id="backToMenuBtn" class="glow-btn outline">Back</button>
+            </div>
+            <p id="joinError" class="error-text"></p>
+        </div>
+    </div>
+
+    <!-- 4. LOBBY SCREEN -->
+    <div id="lobbyScreen" class="screen hidden">
+        <div class="glass-card lobby-card">
+            <h1>Lobby</h1>
+            <div class="room-info">
+                <span>Room Code:</span>
+                <span id="displayRoomCode" class="code-box">------</span>
+            </div>
+
+            <div class="lobby-content">
+                <div class="players-list-section">
+                    <h3>Players in Room</h3>
+                    <ul id="playerList" class="player-list">
+                        <!-- List of players -->
+                    </ul>
+                </div>
+
+                <div class="slots-section">
+                    <h3>Game Slots</h3>
+                    <div class="slots-container">
+                        <div class="slot" id="slotWhite" data-color="white">
+                            <span class="slot-label">White</span>
+                            <div class="slot-player">Waiting...</div>
+                        </div>
+                        <div class="vs-divider">VS</div>
+                        <div class="slot" id="slotBlack" data-color="black">
+                            <span class="slot-label">Black</span>
+                            <div class="slot-player">Waiting...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lobby-controls">
+                <p id="adminMsg" class="admin-only">You are Admin. Select players for slots.</p>
+                <button id="startGameBtn" class="glow-btn disabled" disabled>Start Game</button>
+
+                <p class="waiting-text" id="waitingText">Waiting for admin to start...</p>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="chat-section">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-msg system">Welcome to Neon Chess Lobby!</div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Type a message..." maxlength="100">
+                    <button id="sendChatBtn" class="glow-btn small">Send</button>
+                </div>
+                <div id="chatCooldownMsg" class="error-text" style="font-size: 0.8rem;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. GAME CONTAINER (Existing) -->
+    <div id="gameScreen" class="game-container hidden">
+        <!-- Opponent Dashboard (Top) -->
+        <div class="player-dashboard top">
+            <div class="player-left">
+                <div class="avatar-circle opponent"></div>
+                <div class="player-details">
+                    <span class="player-name" id="oppNameDisplay">Opponent</span>
+                    <span class="captured-pieces" id="oppCaptured"></span>
+                </div>
+            </div>
+            <div class="player-right">
+                <div class="score-advantage" id="oppAdvantage"></div>
+                <div class="timer-box" id="oppTimer">10:00</div>
+            </div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="game-meta-overlay">
+                <span id="gameRoomCodeDisplay" class="room-tag">Room: ----</span>
+                <div id="turnIndicator" class="turn-tag">White's Turn</div>
+            </div>
+            <div id="chessBoard" class="chess-board">
+                <!-- Board squares generated by JS -->
+            </div>
+
+            <!-- History & Actions Bar -->
+            <div class="control-bar">
+                <div class="history-controls">
+                    <button id="btnStart" class="icon-btn" title="Go to Start">|&lt;</button>
+                    <button id="btnPrev" class="icon-btn" title="Previous Move">&lt;</button>
+                    <button id="btnNext" class="icon-btn" title="Next Move">&gt;</button>
+                    <button id="btnEnd" class="icon-btn" title="Go to Recent">&gt;|</button>
+                </div>
+                <div class="action-controls" id="actionControls">
+                    <button id="btnDraw" class="icon-btn action-btn bg-yellow" title="Offer Draw">🤝</button>
+                    <button id="btnResign" class="icon-btn action-btn bg-red" title="Resign">🏳️</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Self Dashboard (Bottom) -->
+        <div class="player-dashboard bottom">
+            <div class="player-left">
+                <div class="avatar-circle self"></div>
+                <div class="player-details">
+                    <span class="player-name" id="myNameDisplay">Me</span>
+                    <span class="captured-pieces" id="myCaptured"></span>
+                </div>
+            </div>
+            <div class="player-right">
+                <div class="score-advantage" id="myAdvantage"></div>
+                <div class="timer-box" id="myTimer">10:00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Chess.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
