@@ -135,14 +135,15 @@ io.on('connection', (socket) => {
     });
 
     // Client claims Game Over (Checkmate/Draw detected locally)
-    socket.on('claim_game_over', ({ roomCode, reason, winner, fen }) => {
+    socket.on('claim_game_over', ({ roomCode, reason, winner, fen, lastMove }) => {
         const room = rooms[roomCode];
         if (room && room.gameStarted) {
             io.to(roomCode).emit('game_over', {
                 reason: reason,
                 winner: winner,
                 message: (winner === 'Draw') ? `Game ended in a Draw (${reason})` : `Checkmate! ${winner} Wins!`,
-                fen: fen // Pass final board state
+                fen: fen, // Pass final board state
+                lastMove: lastMove // Pass last move to preserve history if possible
             });
             room.gameStarted = false;
         }

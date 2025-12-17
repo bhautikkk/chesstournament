@@ -251,10 +251,26 @@ socket.on('draw_rejected', () => {
     showToast("Your offer is rejected", 2000);
 });
 
-socket.on('game_over', ({ reason, winner, message, fen }) => {
-    // If final state provided, snap to it (Fixes race condition where Move is missed)
-    if (fen) {
-        game.load(fen);
+socket.on('game_over', ({ reason, winner, message, fen, lastMove }) => {
+    // If final state provided, ensure we are consistent.
+    if (fen && game.fen() !== fen) {
+        // Try to apply last move to preserve history (NON-DESTRUCTIVE)
+        let moveApplied = false;
+        if (lastMove) {
+            try {
+                const result = game.move(lastMove);
+                if (result) moveApplied = true;
+            } catch (e) {
+                // Ignore error, fallback to load
+            }
+        }
+
+        // If move failed or didn't reach final state, force load (DESTRUCTIVE fallback)
+        if (!moveApplied || game.fen() !== fen) {
+            console.warn("Syncing board state (History may be reset)");
+            game.load(fen);
+        }
+
         renderBoard();
         currentViewIndex = -1; // Ensure live
     }
@@ -756,7 +772,8 @@ function updateTurnIndicator() {
         // Emit claim to server to broadcast Game Over modal.
         // To prevent double emit, maybe only the winner claims? Or both is fine, server handles idempotency?
         // Simpler: Just emit. Server can just broadcast.
-        socket.emit('claim_game_over', { roomCode: currentRoom.code, reason, winner, fen: game.fen() });
+        const lastMove = game.history({ verbose: true }).pop();
+        socket.emit('claim_game_over', { roomCode: currentRoom.code, reason, winner, fen: game.fen(), lastMove });
         isGameActive = false; // Stop local checks
         return;
     }
