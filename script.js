@@ -632,31 +632,30 @@ socket.on('reconnect_game', ({ whitePlayerId, blackPlayerId, fen, whiteTime: wT,
 });
 
 socket.on('move_made', ({ move, fen, whiteTime: wT, blackTime: bT }) => {
-    // 1. Sync Board State
-    // If the FEN does not match our current state, it means we either:
-    // a) Are the opponent receiving the move
-    // b) Are the sender but Desynced
-    // c) Are a spectator
-    if (fen && game.fen() !== fen) {
-        // Try to play the move normally to keep animation
+    // 1. Attempt to apply the move locally (for animation/sound)
+    // We try this regardless of FEN check to ensure animation fires if possible.
+    try {
         const result = game.move(move);
-        if (result) playSound(result); // Play sound for opponent move
-        // If normal move failed (super desync), force load
-        if (!result || game.fen() !== fen) {
-            game.load(fen);
-        }
+        if (result) playSound(result);
+    } catch (e) {
+        // Move might be invalid if we are the sender (already moved) or desynced
     }
-    // If FEN matches, we are likely the sender who Just moved locally. 
-    // We Do Nothing to the board, but we MUST consume the Time Sync below.
 
-    // 2. Sync Timers (Authoritative from Server)
+    // 2. Strong Sync Validation
+    // If our state does not match the server's authoritative FEN, force load.
+    if (fen && game.fen() !== fen) {
+        console.warn("Syncing board state to server FEN");
+        game.load(fen);
+    }
+
+    // 3. Sync Timers (Authoritative from Server)
     if (wT !== undefined) whiteTime = wT; // Keep precise float
     if (bT !== undefined) blackTime = bT;
 
-    // 3. Reset Timer Loop to align with this receipt time
+    // 4. Reset Timer Loop to align with this receipt time
     startTimers();
 
-    // 4. Update UI
+    // 5. Update UI
     currentViewIndex = -1; // Snap to live
     updateTurnIndicator();
     renderBoard();

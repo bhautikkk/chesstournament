@@ -356,6 +356,9 @@ input:focus {
     /* Default Desktop Size */
     aspect-ratio: 1;
     max-width: 100%;
+    border: 3px solid #4488ff;
+    border-radius: 2px;
+    box-shadow: 0 0 20px rgba(68, 136, 255, 0.3);
 }
 
 .square {
@@ -449,7 +452,10 @@ input:focus {
         grid-template-columns: repeat(8, 1fr);
         grid-template-rows: repeat(8, 1fr);
         width: 100%;
+        max-width: 95vw;
         aspect-ratio: 1;
+        margin: 0 auto;
+        border: 2px solid #4488ff;
     }
 
     .square {
