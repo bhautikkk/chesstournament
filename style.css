@@ -824,19 +824,13 @@ input,
     height: 14px;
     width: auto;
     opacity: 0.9;
-    margin-left: -10px;
+    margin-left: -6px;
     /* More Overlap effect */
     transition: transform 0.2s;
 }
 
 .captured-piece-icon:first-child {
     margin-left: 0;
-}
-
-/* Hover effect removed to keep pieces compact */
-.player-dashboard:active .captured-piece-icon {
-    /* No change on click either */
-    margin-left: -10px;
 }
 
 .timer-box {
