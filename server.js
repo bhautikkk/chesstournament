@@ -228,7 +228,8 @@ io.on('connection', (socket) => {
                     blackTime: currentBlackTime,
                     turn: room.turn,
                     whiteDisconnected,
-                    blackDisconnected
+                    blackDisconnected,
+                    pgn: room.pgn // Sync PGN for history
                 });
             }
 
@@ -277,6 +278,10 @@ io.on('connection', (socket) => {
                 room.whiteTime = 600;
                 room.blackTime = 600;
                 room.turn = 'w';
+                room.whiteTime = 600;
+                room.blackTime = 600;
+                room.turn = 'w';
+                room.pgn = ''; // Initialize PGN
                 room.lastMoveTime = Date.now(); // Start clock now
 
                 io.to(roomCode).emit('game_started', {
@@ -390,7 +395,7 @@ io.on('connection', (socket) => {
     }));
 
     // Make Move
-    socket.on('make_move', safeHandler(({ roomCode, move, fen }) => {
+    socket.on('make_move', safeHandler(({ roomCode, move, fen, pgn }) => {
         const room = rooms[roomCode];
         if (room && room.gameStarted) {
             // SAFETY: Check slots
@@ -436,6 +441,7 @@ io.on('connection', (socket) => {
 
             // Update State
             room.fen = fen;
+            room.pgn = pgn; // Store PGN
             room.turn = (room.turn === 'w') ? 'b' : 'w';
             room.lastMoveTime = now;
 

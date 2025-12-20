@@ -946,7 +946,7 @@ socket.on('game_started', ({ whitePlayerId, blackPlayerId }) => {
     updateDashboardUI();  // NEW
 });
 
-socket.on('reconnect_game', ({ roomCode, whitePlayerId, blackPlayerId, whiteName, blackName, fen, whiteTime: wT, blackTime: bT, turn, whiteDisconnected, blackDisconnected }) => {
+socket.on('reconnect_game', ({ roomCode, whitePlayerId, blackPlayerId, whiteName, blackName, fen, whiteTime: wT, blackTime: bT, turn, whiteDisconnected, blackDisconnected, pgn }) => {
     isGameActive = true;
     showScreen('game');
 
@@ -1024,7 +1024,19 @@ socket.on('reconnect_game', ({ roomCode, whitePlayerId, blackPlayerId, whiteName
     }
 
     // Restore State
-    game.load(fen);
+    // FIX: Try to load PGN first (for history), fallback to FEN
+    if (pgn) {
+        console.log("Loading game from PGN (History enabled)");
+        const result = game.load_pgn(pgn);
+        if (!result) {
+            console.warn("PGN Load failed, falling back to FEN");
+            game.load(fen);
+        }
+    } else {
+        console.warn("No PGN provided, loading exact state from FEN (No history)");
+        game.load(fen);
+    }
+
     whiteTime = wT;
     blackTime = bT;
 
@@ -1563,7 +1575,8 @@ function handleSquareClick(squareId) {
             socket.emit('make_move', {
                 roomCode: currentRoom.code,
                 move: moveAttempt,
-                fen: game.fen()
+                fen: game.fen(),
+                pgn: game.pgn() // Send PGN for history sync
             });
             updateMaterial();     // NEW
             updateDashboardUI();  // NEW
